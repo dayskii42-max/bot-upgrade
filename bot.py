@@ -35,7 +35,6 @@ MIN_TOPUP       = 15  # Minimum top-up amount in USD
 # Conversation states
 WAITING_BIN, WAITING_COUNTRY = range(2)
 TOPUP_CHOOSING_CRYPTO, TOPUP_CHOOSING_AMOUNT, TOPUP_CUSTOM_AMOUNT = range(2, 5)
-CHECK_CHANNEL, CHECK_NUMBER, CHECK_MONTH, CHECK_YEAR, CHECK_CVV = range(5, 10)
 
 # In-memory sessions
 user_sessions = {}
