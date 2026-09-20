@@ -1,0 +1,12 @@
+# Payment add-on only. APPEND these to your current requirements.txt.
+# Do not replace your existing bot packages.
+bip-utils>=2.9.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+aiosqlite>=0.20.0
+bech32>=1.2.0
+coincurve>=20.0.0
+web3>=6.15.0
+tronpy>=0.5.0
+eth-account>=0.11.0
+qrcode[pil]>=7.4.2
