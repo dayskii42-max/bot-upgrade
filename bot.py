@@ -16,7 +16,8 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
-from topup.api import payments
+# from topup.api import payments  # Disabled for now
+payments = None  # Placeholder
 
 # --- CONFIG ---
 # Read token from Railway environment (NOT hardcoded)
@@ -776,10 +777,10 @@ def main():
             )
         except Exception as e:
             print(f"Note: Could not notify admin: {e}")
-        await payments.start(application.bot)
+        # await payments.start(application.bot)  # Disabled
 
     async def on_shutdown(application):
-        await payments.stop()
+        # await payments.stop()  # Disabled
 
     app.post_init = on_startup
     app.post_stop = on_shutdown
