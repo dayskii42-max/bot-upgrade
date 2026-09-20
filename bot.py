@@ -5,8 +5,8 @@ Requirements: python-telegram-bot requests
 """
 
 import subprocess, sys
-subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "python-telegram-bot==21.6", "--root-user-action=ignore", "-q"])
-
+import subprocess, sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--root-user-action=ignore", "-q"])
 import requests
 import time
 import asyncio
