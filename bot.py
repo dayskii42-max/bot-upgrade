@@ -150,46 +150,16 @@ def build_lines_keyboard(lines):
 
 # --- HANDLERS ---
 
-# Keywords that indicate promotional / forced-subscription content injected
-# by the backend API. Any API response containing these must never be
-# relayed to the user — we only ever send the bot's own static messages.
-_BLOCKED_KEYWORDS = ("join", "channel", "subscribe", "a_toolsx", "must join")
-
-def _is_suspicious_api_text(value):
-    """Return True if a string value from the API looks like promotional content."""
-    if not isinstance(value, str):
-        return False
-    lowered = value.lower()
-    return any(keyword in lowered for keyword in _BLOCKED_KEYWORDS)
-
-def _sanitize_api_result(result):
-    """Drop any API result that is malformed or carries promotional content.
-
-    We only ever trust well-known numeric/boolean fields (balance_usd, is_new)
-    from this endpoint. If the payload is not a dict, or any string field in it
-    contains forced-subscription / promotional keywords, the whole result is
-    discarded so nothing from the API can be shown to the user.
-    """
-    if not isinstance(result, dict):
-        return None
-    for value in result.values():
-        if _is_suspicious_api_text(value):
-            print("Blocked suspicious/promotional content from backend API response")
-            return None
-    return result
-
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     uname = update.effective_user.username
     fname = update.effective_user.first_name
 
-    # Get balance but ignore promotional content from API
-    raw_result = call_api({"action": "get_balance", "telegram_user_id": str(uid)})
-    result = _sanitize_api_result(raw_result)
-    balance = result.get("balance_usd", 0) if result else 0
-    is_new = result.get("is_new", False) if result else False
-    if is_new:
-        notify_new_user(uid, uname, fname)
+    # No API call on /start — the backend has no opportunity to inject
+    # promotional content this way. Balance defaults to $0 and will be
+    # shown from the payment system or a later API call (e.g. /balance).
+    balance = 0  # Will be shown from payment system or other means
+    is_new = False  # Don't notify backend on /start
     kb = [
         [InlineKeyboardButton("🛒 Browse Store",      callback_data="browse"),
          InlineKeyboardButton("🔍 Search by BIN",     callback_data="search_bin")],
