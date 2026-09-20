@@ -16,6 +16,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
+from topup.api import payments
 
 # --- CONFIG ---
 BOT_TOKEN   = "8578304775:AAHAL8ysmZFKGuZT_s3QGVNzvKxrPuIot9E"
@@ -188,17 +189,14 @@ async def balance_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     uid = query.from_user.id
-    balance = get_balance(uid)
     kb = [
         [InlineKeyboardButton("➕ Top Up Balance", callback_data="topup_start"),
          InlineKeyboardButton("🛒 Browse & Buy",   callback_data="browse")],
         [InlineKeyboardButton("« Back",            callback_data="back_start")],
     ]
+    balance_text = await payments.balance_text(uid)
     await query.edit_message_text(
-        "💰 <b>Your Balance</b>\n\n"
-        "Available: <b>$" + fmt(balance) + " USD</b>\n\n"
-        f"Minimum top-up: <b>${MIN_TOPUP}</b>\n"
-        "Funds are credited automatically after blockchain confirmation.",
+        f"💰 <b>Your Balance</b>\n\n{balance_text}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -281,7 +279,15 @@ async def topup_show_invoice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     session = user_sessions.get(uid, {})
     crypto = session.get("topup_crypto", "USDT_TRC20")
     await query.edit_message_text("⏳ Generating payment address...")
-    await _send_invoice(query.edit_message_text, uid, uname, crypto, amount)
+    info = await payments.create_topup(
+        telegram_id=uid,
+        username=uname,
+        asset_code=crypto,
+    )
+    if info.get("error"):
+        await query.edit_message_text(f"❌ Error: {info['error']}", parse_mode="HTML")
+        return ConversationHandler.END
+    await query.edit_message_text(info["message"], parse_mode="HTML")
     return ConversationHandler.END
 
 async def _send_invoice(reply_fn, uid, uname, crypto, amount):
@@ -506,10 +512,10 @@ async def buy_with_balance_handler(update: Update, ctx: ContextTypes.DEFAULT_TYP
 
 async def balance_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    balance = get_balance(uid)
     kb = [[InlineKeyboardButton("➕ Top Up", callback_data="topup_start"), InlineKeyboardButton("🛒 Browse", callback_data="browse")]]
+    balance_text = await payments.balance_text(uid)
     await update.message.reply_text(
-        "💰 <b>Your Balance</b>\n\nAvailable: <b>$" + fmt(balance) + " USD</b>",
+        f"💰 <b>Your Balance</b>\n\n{balance_text}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -766,8 +772,13 @@ def main():
             )
         except Exception as e:
             print(f"Note: Could not notify admin: {e}")
+        await payments.start(application.bot)
+
+    async def on_shutdown(application):
+        await payments.stop()
 
     app.post_init = on_startup
+    app.post_stop = on_shutdown
     print("🤖 Bot is running!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
