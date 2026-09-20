@@ -19,7 +19,11 @@ from telegram.ext import (
 from topup.api import payments
 
 # --- CONFIG ---
-BOT_TOKEN   = "8578304775:AAHAL8ysmZFKGuZT_s3QGVNzvKxrPuIot9E"
+# Read token from Railway environment (NOT hardcoded)
+import os
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN env variable not set")
 ADMIN_ID    = 8798542436
 STORE_URL   = "https://telegram.me/datalaunch_bot"
 
