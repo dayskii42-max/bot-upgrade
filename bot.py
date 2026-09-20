@@ -121,6 +121,13 @@ def buy_with_balance(user_id, line_id):
         "line_id": line_id,
     })
 
+def refund_purchase(user_id, line_id):
+    return call_api({
+        "action": "refund_purchase",
+        "telegram_user_id": str(user_id),
+        "line_id": line_id,
+    })
+
 def get_my_orders(user_id):
     result = call_api({"action": "my_orders", "telegram_user_id": str(user_id)})
     return result if isinstance(result, list) else []
@@ -470,24 +477,29 @@ async def buy_with_balance_handler(update: Update, ctx: ContextTypes.DEFAULT_TYP
         return
     raw_line = result.get("raw_line", "")
     new_balance = result.get("new_balance", 0)
-    
-    # Show refund button for 2 minutes
-    kb = [[InlineKeyboardButton("🔄 Request Refund (2 min)", callback_data=f"refund_{line_id}")]]
+
+    # Stash purchase details so the check handler can retrieve them later
+    session = user_sessions.setdefault(uid, {})
+    purchases = session.setdefault("purchases", {})
+    purchases[line_id] = {"raw_line": raw_line, "new_balance": new_balance}
+
+    # Show check button for 1 minute (+ buffer)
+    kb = [[InlineKeyboardButton("✅ Check Card (1 min)", callback_data=f"check_{line_id}")]]
     await query.edit_message_text(
         "✅ <b>Purchase Complete!</b>\n\n"
         f"<code>{raw_line}</code>\n\n"
         "Remaining balance: <b>$" + fmt(new_balance) + "</b>\n\n"
-        "⏱️ You have 2 minutes to request a refund if this card is dead.\n\n"
+        "⏱️ You have 1 minute to check this card. Dead cards are refunded automatically.\n\n"
         "Keep this safe. Do not share.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
     )
-    
-    # Schedule refund button removal after 120 seconds
+
+    # Schedule check button removal after 120 seconds (1 min window + buffer)
     ctx.job_queue.run_once(
-        lambda ctx: asyncio.create_task(_remove_refund_button(query, line_id)),
+        lambda ctx: asyncio.create_task(_remove_check_button(query, line_id)),
         120,
-        name=f"refund_timeout_{line_id}"
+        name=f"check_timeout_{line_id}"
     )
 
 async def balance_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -567,28 +579,111 @@ async def my_orders_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="back_start")]]),
     )
 
-async def _remove_refund_button(query, line_id):
+async def _remove_check_button(query, line_id):
     try:
         await query.edit_message_text(
-            query.message.text + "\n\n⏰ <i>Refund window closed.</i>",
+            query.message.text + "\n\n⏰ <i>Check window closed.</i>",
             parse_mode="HTML"
         )
     except:
         pass
 
-async def refund_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+def _parse_raw_line(raw_line):
+    """Parse a raw card line (number|month|year|cvv) into OneCheck fields."""
+    parts = [p.strip() for p in raw_line.replace("/", "|").split("|") if p.strip() != ""]
+    if len(parts) < 4:
+        # Fallback: try whitespace-separated
+        parts = raw_line.split()
+    if len(parts) < 4:
+        return None
+    number, month, year, cvv = parts[0], parts[1], parts[2], parts[3]
+    if len(year) == 4:
+        year = year[2:]
+    return {
+        "number": number,
+        "month": month.zfill(2),
+        "year": year,
+        "cvv": cvv,
+    }
+
+async def check_card_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    line_id = query.data.replace("refund_", "")
+    line_id = query.data.replace("check_", "")
     uid = query.from_user.id
-    
-    # In a real app, you'd check the 2-minute window server-side
-    # For now, just refund immediately
+
+    session = user_sessions.get(uid, {})
+    purchase = session.get("purchases", {}).get(line_id)
+    if not purchase:
+        await query.edit_message_text(
+            "❌ Could not find this purchase to check. Please contact support.",
+            parse_mode="HTML"
+        )
+        return
+
+    raw_line = purchase.get("raw_line", "")
+    card = _parse_raw_line(raw_line)
+    if not card:
+        await query.edit_message_text(
+            "❌ Could not parse card details for checking. Please contact support.",
+            parse_mode="HTML"
+        )
+        return
+
     await query.edit_message_text(
-        "⏳ <b>Processing Refund...</b>\n\n"
-        "This feature requires backend integration with your order system.",
+        "🔎 <b>Checking card...</b>\n\nThis may take up to a few minutes. Please wait.",
         parse_mode="HTML"
     )
+
+    try:
+        task_id = create_check_task(card)
+        if not task_id:
+            raise ValueError("No task id returned from OneCheck")
+        result = await asyncio.to_thread(poll_check_task, task_id, 180)
+    except Exception as e:
+        print(f"OneCheck error: {e}")
+        await query.edit_message_text(
+            "⚠️ <b>Check Failed</b>\n\n"
+            "We could not verify this card right now. Please contact support if you believe it is dead.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")]])
+        )
+        return
+
+    status = (result.get("status_result") or result.get("result") or "").lower()
+
+    if status == "dead":
+        refund_result = refund_purchase(uid, line_id)
+        if refund_result and not refund_result.get("error"):
+            new_balance = refund_result.get("new_balance", 0)
+            await query.edit_message_text(
+                "💀 <b>Card is Dead</b>\n\n"
+                "You have been refunded automatically.\n\n"
+                "New balance: <b>$" + fmt(new_balance) + "</b>",
+                parse_mode="HTML"
+            )
+        else:
+            err = refund_result.get("error") if refund_result else "Unknown error"
+            await query.edit_message_text(
+                "💀 <b>Card is Dead</b>\n\n"
+                f"Automatic refund failed ({err}). Please contact support for a manual refund.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")]])
+            )
+    elif status == "live":
+        await query.edit_message_text(
+            "✅ <b>Card is Live!</b>\n\n"
+            "No refund necessary. Enjoy!",
+            parse_mode="HTML"
+        )
+    else:
+        await query.edit_message_text(
+            "❓ <b>Unable to Determine Status</b>\n\n"
+            f"OneCheck returned: <code>{status or 'unknown'}</code>\n\n"
+            "Please contact support if you believe this card is dead.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")]])
+        )
 
 async def admin_deliver(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -657,7 +752,7 @@ def main():
     app.add_handler(CallbackQueryHandler(my_orders_handler,       pattern="^my_orders$"))
     app.add_handler(CallbackQueryHandler(search_base_prompt,      pattern="^search_base$"))
     app.add_handler(CallbackQueryHandler(browse_base,             pattern=r"^base_"))
-    app.add_handler(CallbackQueryHandler(refund_handler,          pattern=r"^refund_"))
+    app.add_handler(CallbackQueryHandler(check_card_handler,      pattern=r"^check_"))
     app.add_handler(topup_conv)
 
     async def on_startup(application):
