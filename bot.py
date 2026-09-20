@@ -16,6 +16,8 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from topup.api import payments
 
 # --- CONFIG ---
