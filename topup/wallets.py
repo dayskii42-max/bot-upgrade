@@ -6,6 +6,7 @@ Customers only ever see the address. Copy this file with the rest of topup/.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from bip_utils import (
@@ -19,6 +20,8 @@ from bip_utils import (
 )
 
 from topup.config import ASSETS
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,8 +45,16 @@ class HDWalletEngine:
     """Derives a unique deposit address from one master mnemonic."""
 
     def __init__(self, mnemonic: str) -> None:
-        if not Bip39MnemonicValidator().IsValid(mnemonic):
+        # Normalize: strip, collapse whitespace
+        mnemonic = " ".join(mnemonic.split())
+        
+        # Validate
+        is_valid = Bip39MnemonicValidator().IsValid(mnemonic)
+        if not is_valid:
+            log.error(f"BIP39 validation failed for mnemonic: {repr(mnemonic)}")
+            log.error(f"Mnemonic length: {len(mnemonic)} chars, {len(mnemonic.split())} words")
             raise SystemExit("MASTER_MNEMONIC is not a valid BIP39 mnemonic.")
+        
         self._seed = Bip39SeedGenerator(mnemonic).Generate()
         self._accounts: dict[str, object] = {}
 
@@ -99,3 +110,4 @@ class HDWalletEngine:
             return self._ctx(asset, index).PrivateKey().ToWif()
         except Exception:
             return None
+
