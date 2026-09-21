@@ -4,9 +4,6 @@ DataLine Store - Telegram Bot (Balance-Only Purchase, $15 min top-up)
 Requirements: python-telegram-bot requests
 """
 
-import subprocess, sys
-import subprocess, sys
-subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--root-user-action=ignore", "-q"])
 import requests
 import time
 import asyncio
