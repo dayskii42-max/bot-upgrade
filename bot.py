@@ -5,10 +5,8 @@ Unified single-source-of-truth: topup.api.payments for balance, topup, and purch
 """
 
 import asyncio
-from topup import config
 import os
 import sys
-import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -17,7 +15,6 @@ from telegram.ext import (
 
 # Add repo root to path so topup/ module is found
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from topup.api import payments
 
 # --- CONFIG ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -46,8 +43,6 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     fname = update.effective_user.first_name or "there"
     
-    balance_text = await payments.balance_text(uid)
-    
     kb = [
         [InlineKeyboardButton("💰 Check Balance", callback_data="balance_menu"),
          InlineKeyboardButton("➕ Top Up", callback_data="topup_start")],
@@ -66,7 +61,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "✅ Refunds on all cards if dead\n"
         "✅ All cards checked before upload\n"
         "✅ Proof of valid rate with base\n\n"
-        f"{balance_text}\n\n"
+        "💰 Your balance: $0.00\n\n"
         "📌 Not seeing your BIN? Message @Andro_ccz\n",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
@@ -76,9 +71,6 @@ async def balance_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Show balance from topup DB"""
     query = update.callback_query
     await query.answer()
-    uid = query.from_user.id
-    
-    balance_text = await payments.balance_text(uid)
     
     kb = [
         [InlineKeyboardButton("➕ Top Up", callback_data="topup_start"),
@@ -87,7 +79,8 @@ async def balance_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ]
     
     await query.edit_message_text(
-        f"💰 <b>Your Balance</b>\n\n{balance_text}",
+        "💰 <b>Your Balance</b>\n\n"
+        "Your balance: $0.00",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -153,9 +146,6 @@ async def topup_custom_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def topup_receive_custom_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Receive custom amount and generate invoice"""
-    uid = update.effective_user.id
-    uname = update.effective_user.username or str(uid)
-    
     try:
         amount = float(update.message.text.strip())
         if amount < MIN_TOPUP:
@@ -165,21 +155,7 @@ async def topup_receive_custom_amount(update: Update, ctx: ContextTypes.DEFAULT_
             )
             return TOPUP_CUSTOM_AMOUNT
         
-        session = user_sessions.get(uid, {})
-        crypto = session.get("topup_crypto", "USDT_TRC20")
-        
-        await update.message.reply_text("⏳ Generating payment address...")
-        info = await payments.create_topup(
-            telegram_id=uid,
-            username=uname,
-            asset_code=crypto,
-        )
-        
-        if info.get("error"):
-            await update.message.reply_text(f"❌ Error: {info['error']}", parse_mode="HTML")
-        else:
-            await update.message.reply_text(info["message"], parse_mode="HTML")
-        
+        await update.message.reply_text("✅ Payment address would be generated here.")
         return ConversationHandler.END
     except ValueError:
         await update.message.reply_text("⚠️ Please enter a valid number (e.g., 20, 50.50).")
@@ -190,29 +166,14 @@ async def topup_show_invoice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    uid = query.from_user.id
-    uname = query.from_user.username or str(uid)
-    
-    session = user_sessions.get(uid, {})
+    session = user_sessions.get(query.from_user.id, {})
     crypto = session.get("topup_crypto", "USDT_TRC20")
     
-    await query.edit_message_text("⏳ Generating payment address...")
-    
-    info = await payments.create_topup(
-        telegram_id=uid,
-        username=uname,
-        asset_code=crypto,
-    )
-    
-    if info.get("error"):
-        await query.edit_message_text(f"❌ Error: {info['error']}", parse_mode="HTML")
-    else:
-        await query.edit_message_text(info["message"], parse_mode="HTML")
-    
+    await query.edit_message_text(f"✅ Payment address would be generated for {crypto}")
     return ConversationHandler.END
 
 async def browse(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Placeholder: browse store (you'd connect to your real catalog API here)"""
+    """Placeholder: browse store"""
     query = update.callback_query
     await query.answer()
     
@@ -288,22 +249,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Log errors"""
     print(f"Update {update} caused error {context.error}")
 
-async def post_init(app: Application) -> None:
-    """Initialize payments module after app is ready - do NOT autostart poller here"""
-    print("🤖 Starting bot...")
-    # Start payments but disable autostart_poller (we'll handle polling separately)
-    await payments.start(app.bot, autostart_poller=False)
-    # Manually create the poller task after app is running
-    if payments.poller is not None:
-        payments._task = asyncio.create_task(payments._poll_loop(app.bot), name="payments-poller")
-    print("🤖 Bot is running!")
-
 async def main():
     """Run the bot"""
+    print("🤖 Starting bot...")
     app = Application.builder().token(BOT_TOKEN).build()
-    
-    # Use post_init to initialize payments
-    app.post_init = post_init
     
     # Command handlers
     app.add_handler(CommandHandler("start", start))
@@ -342,6 +291,7 @@ async def main():
     app.add_error_handler(error_handler)
     
     # Run bot
+    print("🤖 Bot is running!")
     await app.run_polling()
 
 if __name__ == "__main__":
