@@ -55,7 +55,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")],
     ]
     
-    await update.message.reply_text(
+    text = (
         f"👋 Welcome <b>{fname}</b> to\n\n"
         "💵 <b>ANDRO'S CVV STORE</b> 💵\n\n"
         "💲 Cheap price, good quality sniffed CVV 🏦\n\n"
@@ -63,10 +63,14 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "✅ All cards checked before upload\n"
         "✅ Proof of valid rate with base\n\n"
         f"{balance_text}\n\n"
-        "📌 Not seeing your BIN? Message @Andro_ccz\n",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(kb)
+        "📌 Not seeing your BIN? Message @Andro_ccz\n"
     )
+    
+    # Handle both /start (message) and back button (callback_query)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
 
 async def topup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Start top-up: choose crypto"""
@@ -259,7 +263,6 @@ async def back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Go back to /start"""
     query = update.callback_query
     await query.answer()
-    await query.delete_message()
     await start(update, ctx)
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
