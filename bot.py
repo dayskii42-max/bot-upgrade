@@ -289,16 +289,20 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     print(f"Update {update} caused error {context.error}")
 
 async def post_init(app: Application) -> None:
-    """Initialize payments module after app is ready"""
+    """Initialize payments module after app is ready - do NOT autostart poller here"""
     print("🤖 Starting bot...")
-    await payments.start(app.bot)
+    # Start payments but disable autostart_poller (we'll handle polling separately)
+    await payments.start(app.bot, autostart_poller=False)
+    # Manually create the poller task after app is running
+    if payments.poller is not None:
+        payments._task = asyncio.create_task(payments._poll_loop(app.bot), name="payments-poller")
     print("🤖 Bot is running!")
 
 async def main():
     """Run the bot"""
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Use post_init instead of calling payments.start manually
+    # Use post_init to initialize payments
     app.post_init = post_init
     
     # Command handlers
