@@ -46,14 +46,13 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     balance_text = await payments.balance_text(uid)
     
     kb = [
-        [InlineKeyboardButton("💰 Check Balance", callback_data="balance_menu"),
-         InlineKeyboardButton("➕ Top Up", callback_data="topup_start")],
-        [InlineKeyboardButton("🛒 Browse Store", callback_data="browse"),
-         InlineKeyboardButton("🔍 Search by BIN", callback_data="search_bin")],
-        [InlineKeyboardButton("🌍 Search Country", callback_data="search_country"),
-         InlineKeyboardButton("📦 Search Base", callback_data="search_base")],
-        [InlineKeyboardButton("📋 My Orders", callback_data="my_orders"),
-         InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")],
+        [InlineKeyboardButton("➕ Top Up", callback_data="topup_start"),
+         InlineKeyboardButton("🛒 Browse Store", callback_data="browse")],
+        [InlineKeyboardButton("🔍 Search by BIN", callback_data="search_bin"),
+         InlineKeyboardButton("🌍 Search Country", callback_data="search_country")],
+        [InlineKeyboardButton("📦 Search Base", callback_data="search_base"),
+         InlineKeyboardButton("📋 My Orders", callback_data="my_orders")],
+        [InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")],
     ]
     
     await update.message.reply_text(
@@ -69,41 +68,23 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-async def balance_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Show balance from topup DB"""
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    
-    balance_text = await payments.balance_text(uid)
-    
-    kb = [
-        [InlineKeyboardButton("➕ Top Up", callback_data="topup_start"),
-         InlineKeyboardButton("🛒 Browse", callback_data="browse")],
-        [InlineKeyboardButton("« Back", callback_data="back_start")],
-    ]
-    
-    await query.edit_message_text(
-        f"💰 <b>Your Balance</b>\n\n{balance_text}",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
 async def topup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Start top-up: choose crypto"""
     query = update.callback_query
     await query.answer()
     
     kb = [
-        [InlineKeyboardButton("₮ USDT TRC20", callback_data="tc_USDT_TRC20"),
+        [InlineKeyboardButton("₿ Bitcoin (BTC)", callback_data="tc_BTC"),
          InlineKeyboardButton("Ł Litecoin (LTC)", callback_data="tc_LTC")],
+        [InlineKeyboardButton("Ξ Ethereum (ETH)", callback_data="tc_ETH"),
+         InlineKeyboardButton("₮ USDT TRC20", callback_data="tc_USDT_TRC20")],
         [InlineKeyboardButton("« Back", callback_data="back_start")],
     ]
     
     await query.edit_message_text(
         f"➕ <b>Top Up Balance</b>\n\n"
         f"Minimum: <b>${MIN_TOPUP} USD</b>\n\n"
-        "✅ <b>Auto-confirmation</b> — send the exact amount and your balance credits after 3 blockchain confirmations (5-15 min).\n\n"
+        "✅ <b>Auto-confirmation</b> — send the exact amount and your balance credits after confirmations.\n\n"
         "Choose crypto:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(kb)
@@ -304,7 +285,6 @@ def main():
     
     # Command handlers
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("balance", start))
     
     # Conversation handler for top-up
     topup_handler = ConversationHandler(
@@ -327,7 +307,6 @@ def main():
     app.add_handler(topup_handler)
     
     # Button handlers
-    app.add_handler(CallbackQueryHandler(balance_menu, pattern="^balance_menu$"))
     app.add_handler(CallbackQueryHandler(browse, pattern="^browse$"))
     app.add_handler(CallbackQueryHandler(search_bin, pattern="^search_bin$"))
     app.add_handler(CallbackQueryHandler(search_country, pattern="^search_country$"))
