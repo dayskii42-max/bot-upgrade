@@ -288,13 +288,18 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Log errors"""
     print(f"Update {update} caused error {context.error}")
 
+async def post_init(app: Application) -> None:
+    """Initialize payments module after app is ready"""
+    print("🤖 Starting bot...")
+    await payments.start(app.bot)
+    print("🤖 Bot is running!")
+
 async def main():
     """Run the bot"""
-    print("🤖 Starting bot...")
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Start payment poller
-    await payments.start(app.bot)
+    # Use post_init instead of calling payments.start manually
+    app.post_init = post_init
     
     # Command handlers
     app.add_handler(CommandHandler("start", start))
@@ -333,7 +338,6 @@ async def main():
     app.add_error_handler(error_handler)
     
     # Run bot
-    print("🤖 Bot is running!")
     await app.run_polling()
 
 if __name__ == "__main__":
