@@ -290,6 +290,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def main():
     """Run the bot"""
+    print("🤖 Starting bot...")
     app = Application.builder().token(BOT_TOKEN).build()
     
     # Start payment poller
@@ -332,6 +333,7 @@ async def main():
     app.add_error_handler(error_handler)
     
     # Run bot
+    print("🤖 Bot is running!")
     await app.run_polling()
 
 if __name__ == "__main__":
