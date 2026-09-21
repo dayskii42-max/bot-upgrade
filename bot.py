@@ -36,7 +36,199 @@ user_sessions = {}
 def fmt(x):
     return f"{x:.2f}"
 
-# --- HANDLERS ---
+def is_admin(user_id: int) -> bool:
+    return user_id == ADMIN_ID
+
+# --- ADMIN HANDLERS ---
+
+async def admin_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Admin panel"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Unauthorized")
+        return
+    
+    kb = [
+        [InlineKeyboardButton("📊 Stats", callback_data="admin_stats"),
+         InlineKeyboardButton("💰 Top Ups", callback_data="admin_topups")],
+        [InlineKeyboardButton("👥 Users", callback_data="admin_users"),
+         InlineKeyboardButton("📈 Balance", callback_data="admin_balance")],
+        [InlineKeyboardButton("🔧 Settings", callback_data="admin_settings")],
+    ]
+    
+    await update.message.reply_text(
+        "🔐 <b>ADMIN PANEL</b>\n\n"
+        "Select an option:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def admin_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Show payment stats"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    # Get stats from payments module
+    stats = await payments.get_stats()
+    
+    text = (
+        "📊 <b>Payment Stats</b>\n\n"
+        f"Total Deposits: {stats.get('total_deposits', 0)}\n"
+        f"Total Amount: ${fmt(float(stats.get('total_amount', 0)))}\n"
+        f"Pending: {stats.get('pending_count', 0)}\n"
+        f"Confirmed: {stats.get('confirmed_count', 0)}\n"
+        f"Active Users: {stats.get('unique_users', 0)}\n"
+    )
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Back", callback_data="admin_back")]
+        ])
+    )
+
+async def admin_topups(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Show recent top-ups"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    topups = await payments.get_recent_topups(limit=10)
+    
+    text = "💰 <b>Recent Top Ups</b>\n\n"
+    if topups:
+        for topup in topups:
+            text += (
+                f"User: {topup.get('username', 'N/A')}\n"
+                f"Amount: ${fmt(float(topup.get('usd_amount', 0)))}\n"
+                f"Asset: {topup.get('asset_code', 'N/A')}\n"
+                f"Status: {topup.get('status', 'pending')}\n\n"
+            )
+    else:
+        text += "No recent top-ups"
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Back", callback_data="admin_back")]
+        ])
+    )
+
+async def admin_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Show user stats"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    users = await payments.get_users_summary()
+    
+    text = "👥 <b>User Summary</b>\n\n"
+    if users:
+        for user in users[:10]:  # Top 10
+            text += (
+                f"ID: {user.get('telegram_id', 'N/A')}\n"
+                f"Balance: ${fmt(float(user.get('balance', 0)))}\n"
+                f"Deposits: {user.get('deposit_count', 0)}\n\n"
+            )
+    else:
+        text += "No users yet"
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Back", callback_data="admin_back")]
+        ])
+    )
+
+async def admin_balance(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Show total balance info"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    balance_info = await payments.get_balance_info()
+    
+    text = (
+        "💰 <b>Balance Summary</b>\n\n"
+        f"Total User Balance: ${fmt(float(balance_info.get('total_balance', 0)))}\n"
+        f"Pending Confirmations: ${fmt(float(balance_info.get('pending_amount', 0)))}\n"
+        f"Confirmed: ${fmt(float(balance_info.get('confirmed_amount', 0)))}\n"
+    )
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Back", callback_data="admin_back")]
+        ])
+    )
+
+async def admin_settings(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Admin settings"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    auto_sweep = os.getenv("AUTO_SWEEP", "true").lower() in {"1", "true", "yes", "on"}
+    enabled_assets = os.getenv("ENABLED_ASSETS", "").split(",")
+    
+    text = (
+        "🔧 <b>Settings</b>\n\n"
+        f"Auto Sweep: {'✅ ON' if auto_sweep else '❌ OFF'}\n"
+        f"Enabled Assets: {', '.join(enabled_assets)}\n"
+        f"Poll Interval: {os.getenv('POLL_INTERVAL_SECONDS', '20')}s\n"
+    )
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Back", callback_data="admin_back")]
+        ])
+    )
+
+async def admin_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Back to admin menu"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    kb = [
+        [InlineKeyboardButton("📊 Stats", callback_data="admin_stats"),
+         InlineKeyboardButton("💰 Top Ups", callback_data="admin_topups")],
+        [InlineKeyboardButton("👥 Users", callback_data="admin_users"),
+         InlineKeyboardButton("📈 Balance", callback_data="admin_balance")],
+        [InlineKeyboardButton("🔧 Settings", callback_data="admin_settings")],
+    ]
+    
+    await query.edit_message_text(
+        "🔐 <b>ADMIN PANEL</b>\n\nSelect an option:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# --- USER HANDLERS ---
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Main menu"""
@@ -286,6 +478,9 @@ def main():
     print("🤖 Starting bot...")
     app = Application.builder().token(BOT_TOKEN).build()
     
+    # Admin command
+    app.add_handler(CommandHandler("admin", admin_start))
+    
     # Command handlers
     app.add_handler(CommandHandler("start", start))
     
@@ -316,6 +511,14 @@ def main():
     app.add_handler(CallbackQueryHandler(search_base, pattern="^search_base$"))
     app.add_handler(CallbackQueryHandler(my_orders, pattern="^my_orders$"))
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="^back_start$"))
+    
+    # Admin handlers
+    app.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
+    app.add_handler(CallbackQueryHandler(admin_topups, pattern="^admin_topups$"))
+    app.add_handler(CallbackQueryHandler(admin_users, pattern="^admin_users$"))
+    app.add_handler(CallbackQueryHandler(admin_balance, pattern="^admin_balance$"))
+    app.add_handler(CallbackQueryHandler(admin_settings, pattern="^admin_settings$"))
+    app.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
     
     # Error handler
     app.add_error_handler(error_handler)
