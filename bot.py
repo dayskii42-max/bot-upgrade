@@ -5,7 +5,7 @@ Unified single-source-of-truth: topup.api.payments for balance, topup, and purch
 """
 
 import asyncio
-import config
+from topup import config
 import os
 import sys
 import time
