@@ -247,6 +247,10 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🆘 Support", url="https://t.me/Andro_ccz")],
     ]
     
+    # Add admin button if user is admin
+    if is_admin(uid):
+        kb.append([InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_menu")])
+    
     text = (
         f"👋 Welcome <b>{fname}</b> to\n\n"
         "💵 <b>ANDRO'S CVV STORE</b> 💵\n\n"
@@ -263,6 +267,31 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
     else:
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
+async def admin_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Show admin menu from button"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Unauthorized")
+        return
+    
+    kb = [
+        [InlineKeyboardButton("📊 Stats", callback_data="admin_stats"),
+         InlineKeyboardButton("💰 Top Ups", callback_data="admin_topups")],
+        [InlineKeyboardButton("👥 Users", callback_data="admin_users"),
+         InlineKeyboardButton("📈 Balance", callback_data="admin_balance")],
+        [InlineKeyboardButton("🔧 Settings", callback_data="admin_settings")],
+        [InlineKeyboardButton("« Back", callback_data="back_start")],
+    ]
+    
+    await query.edit_message_text(
+        "🔐 <b>ADMIN PANEL</b>\n\n"
+        "Select an option:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 
 async def topup_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Start top-up: choose crypto"""
@@ -513,6 +542,7 @@ def main():
     app.add_handler(CallbackQueryHandler(back_to_start, pattern="^back_start$"))
     
     # Admin handlers
+    app.add_handler(CallbackQueryHandler(admin_menu, pattern="^admin_menu$"))
     app.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
     app.add_handler(CallbackQueryHandler(admin_topups, pattern="^admin_topups$"))
     app.add_handler(CallbackQueryHandler(admin_users, pattern="^admin_users$"))
