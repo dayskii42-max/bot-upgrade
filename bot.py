@@ -4,7 +4,6 @@ DataLine Store - Telegram Bot (Railway + topup DB only)
 Unified single-source-of-truth: topup.api.payments for balance, topup, and purchases
 """
 
-import asyncio
 import os
 import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -249,7 +248,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Log errors"""
     print(f"Update {update} caused error {context.error}")
 
-async def main():
+def main():
     """Run the bot"""
     print("🤖 Starting bot...")
     app = Application.builder().token(BOT_TOKEN).build()
@@ -292,8 +291,8 @@ async def main():
     
     # Run bot
     print("🤖 Bot is running!")
-    await app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
